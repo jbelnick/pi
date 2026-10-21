@@ -13,12 +13,20 @@ import type {
 import { estimateContextTokens } from "../utils/estimate.ts";
 
 const CONTEXT_SAFETY_TOKENS = 4096;
+/**
+ * Smallest output limit the context clamp requests. The estimate can be too high by more than the
+ * free space (for example on a large first turn with no usage yet), and a limit near 1 leaves a
+ * reasoning model no room to answer. If the context is really full, the provider rejects the
+ * request with an overflow error, which callers already handle. Equal to the safety margin, so the
+ * request only exceeds the estimated window when the estimate alone leaves less than this.
+ */
+const MIN_CLAMPED_MAX_TOKENS = CONTEXT_SAFETY_TOKENS;
 const MIN_MAX_TOKENS = 1;
 
 export function clampMaxTokensToContext(model: Model<Api>, context: TranscriptContext, maxTokens: number): number {
 	if (model.contextWindow <= 0) return Math.max(MIN_MAX_TOKENS, maxTokens);
 	const available = model.contextWindow - estimateContextTokens(context).tokens - CONTEXT_SAFETY_TOKENS;
-	return Math.min(maxTokens, Math.max(MIN_MAX_TOKENS, available));
+	return Math.min(maxTokens, Math.max(MIN_CLAMPED_MAX_TOKENS, available));
 }
 
 export function resolveSamplingParams(

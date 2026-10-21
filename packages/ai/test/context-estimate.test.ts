@@ -45,16 +45,16 @@ describe("context token estimation", () => {
 	// Regression for #10497: large new inputs need more room than chars/4 allows.
 	it("reserves 3.5 characters per token for new text when limiting output", () => {
 		const context = normalizeContext({
-			messages: [createAssistant(100, 2_000), { role: "user", content: "x".repeat(3_500), timestamp: 200 }],
+			messages: [createAssistant(100, 500), { role: "user", content: "x".repeat(1_750), timestamp: 200 }],
 		});
 
 		expect(estimateContextTokens(context)).toEqual({
-			tokens: 3_000,
-			usageTokens: 2_000,
-			trailingTokens: 1_000,
+			tokens: 1_000,
+			usageTokens: 500,
+			trailingTokens: 500,
 			lastUsageIndex: 0,
 		});
-		expect(buildBaseOptions(model, context).maxTokens).toBe(2_904);
+		expect(buildBaseOptions(model, context).maxTokens).toBe(4_904);
 	});
 
 	it("ignores stale assistant usage after a newer message is inserted before it", () => {
@@ -74,6 +74,17 @@ describe("context token estimation", () => {
 			lastUsageIndex: null,
 		});
 		expect(buildBaseOptions(model, context).maxTokens).toBe(4_755);
+	});
+
+	// Regression for #11236: an estimate above the window must not shrink the output limit to 1.
+	it("keeps a minimum output limit when the estimate fills the window", () => {
+		const context = normalizeContext({
+			messages: [{ role: "user", content: "x".repeat(35_000), timestamp: 100 }],
+		});
+
+		expect(estimateContextTokens(context).tokens).toBe(10_000);
+		expect(buildBaseOptions(model, context).maxTokens).toBe(4_096);
+		expect(buildBaseOptions(model, context, { maxTokens: 500 }).maxTokens).toBe(500);
 	});
 
 	it("uses assistant usage again after a response to the inserted context", () => {
